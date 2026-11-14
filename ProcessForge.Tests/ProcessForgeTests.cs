@@ -91,6 +91,23 @@ public sealed class ProcessForgeTests
         target.Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData("python3\0-c\0print(1)\nprint(2)\0", "python3 -c print(1) print(2)")]
+    [InlineData("bash\0-c\0echo a\r\necho b\0", "bash -c echo a echo b")]
+    [InlineData("node\0/srv/app.js\0\0", "node /srv/app.js")]
+    [InlineData("python3\0-c\0a = 1\u2028b = 2", "python3 -c a = 1 b = 2")]
+    [InlineData("\0\0", "")]
+    [InlineData("", "")]
+    [InlineData("C:\\tools\\agent.exe\t--config\tC:\\tools\\agent.yaml", "C:\\tools\\agent.exe --config C:\\tools\\agent.yaml")]
+    public void NormalizeCommandLine_WhenArgumentsContainLineBreaksOrSeparators_ReturnsSingleLine(string raw, string expected)
+    {
+        // Act
+        var commandLine = CrossPlatformProcessInspector.NormalizeCommandLine(raw);
+
+        // Assert
+        commandLine.Should().Be(expected);
+    }
+
     [Fact]
     public void ShouldExclude_WhenPidMatches_ReturnsTrue()
     {

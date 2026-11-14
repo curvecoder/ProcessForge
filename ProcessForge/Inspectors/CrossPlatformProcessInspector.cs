@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.RegularExpressions;
 using ProcessForge.Contracts;
 using ProcessForge.Models;
@@ -115,11 +116,42 @@ public sealed class CrossPlatformProcessInspector : IProcessInspector
         return string.Empty;
     }
 
+    /// <summary>
+    /// Turns a raw command line (NUL-separated arguments of <c>/proc/&lt;pid&gt;/cmdline</c>, or a Windows command line
+    /// whose arguments contain line breaks) into a single line.
+    /// </summary>
+    /// <remarks>
+    /// Consumers write the command line as one field of line-oriented reports (CSV): a line break kept inside an
+    /// argument (<c>python -c "a\nb"</c>) would split the record. Each run of control characters or blanks other
+    /// than the space becomes one space; ordinary spaces inside arguments are kept.
+    /// </remarks>
+    internal static string NormalizeCommandLine(string rawCommandLine)
+    {
+        var builder = new StringBuilder(rawCommandLine.Length);
+        var previousWasSeparator = false;
+        foreach (var character in rawCommandLine)
+        {
+            var isSeparator = character != ' ' && (char.IsControl(character) || char.IsWhiteSpace(character));
+            if (!isSeparator)
+            {
+                builder.Append(character);
+            }
+            else if (!previousWasSeparator)
+            {
+                builder.Append(' ');
+            }
+
+            previousWasSeparator = isSeparator;
+        }
+
+        return builder.ToString().Trim();
+    }
+
     private static string TryGetCommandLine(Process proc)
     {
         if (OperatingSystem.IsWindows())
         {
-            return WindowsCommandLineReader.Read(proc.Id);
+            return NormalizeCommandLine(WindowsCommandLineReader.Read(proc.Id));
         }
 
         if (OperatingSystem.IsLinux())
@@ -130,7 +162,7 @@ public sealed class CrossPlatformProcessInspector : IProcessInspector
                 try
                 {
                     var bytes = File.ReadAllBytes(cmdlinePath);
-                    return System.Text.Encoding.UTF8.GetString(bytes).Replace('\0', ' ').Trim();
+                    return NormalizeCommandLine(System.Text.Encoding.UTF8.GetString(bytes));
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
