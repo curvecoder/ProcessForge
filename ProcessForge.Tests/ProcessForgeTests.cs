@@ -79,6 +79,21 @@ public sealed class ProcessForgeTests
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(250));
     }
 
+    [Fact]
+    public void ResolveTargetPayload_WhenJavaCommandLineHasLongBlankRun_ReturnsEmptyQuickly()
+    {
+        // Arrange: a padded argument or a raw command line keeping its separators can hold long runs of blanks.
+        var blanks = new string(' ', 50_000);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        // Act
+        var act = () => CrossPlatformProcessInspector.ResolveTargetPayload("java", $"java -cp{blanks}lib Main");
+
+        // Assert
+        act.Should().NotThrow().Subject.Should().BeEmpty();
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(250));
+    }
+
     [Theory]
     [InlineData("bash", "/bin/bash -c cat /etc/foo.shared")]
     [InlineData("cmd", "cmd.exe /c type C:\\data\\report.cmdline")]
@@ -342,6 +357,33 @@ public sealed class ProcessForgeTests
     {
         // Act
         var target = CrossPlatformProcessInspector.ResolveTargetPayload("java", cmdLine!);
+
+        // Assert
+        target.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("java -jar \"/opt/app/myservice.jar\" --port 8080", "/opt/app/myservice.jar")]
+    [InlineData("javaw.exe -Xmx512m -jar C:\\apps\\inventory.JAR", "C:\\apps\\inventory.JAR")]
+    [InlineData("java -cp /opt/lib/driver.jar /opt/app/myservice.jar", "/opt/app/myservice.jar")]
+    public void ResolveTargetPayload_WhenJavaRunsQuotedOrUppercaseJar_ExtractsTarget(string cmdLine, string expected)
+    {
+        // Act
+        var target = CrossPlatformProcessInspector.ResolveTargetPayload("java", cmdLine);
+
+        // Assert
+        target.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("java -cp /opt/lib/driver.jar org.example.Main")]
+    [InlineData("java -jar /opt/app/myservice.jar.bak")]
+    [InlineData("java -jar")]
+    [InlineData("java -jar \"C:\\Program Files\\Inventory\\inventory.jar\"")]
+    public void ResolveTargetPayload_WhenJarIsClasspathOrNotJarFile_ReturnsEmpty(string cmdLine)
+    {
+        // Act
+        var target = CrossPlatformProcessInspector.ResolveTargetPayload("java", cmdLine);
 
         // Assert
         target.Should().BeEmpty();

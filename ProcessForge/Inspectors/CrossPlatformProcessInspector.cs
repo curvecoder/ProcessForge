@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Text;
-using System.Text.RegularExpressions;
 using ProcessForge.Contracts;
 using ProcessForge.Models;
 
@@ -11,11 +10,9 @@ namespace ProcessForge.Inspectors;
 /// </summary>
 public sealed class CrossPlatformProcessInspector : IProcessInspector
 {
-    private static readonly Regex JarPattern = new(@"\s+(-jar\s+|(?<=\.jar\s+)|^)(?<target>[^\s""']+\.jar)", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ExplicitCapture, TimeSpan.FromMilliseconds(500));
-
     // The command line is split into tokens and the extension is tested at the end of each one, so that foo.shared is
-    // not a .sh script. A regular expression searching a script anywhere backtracks quadratically on a long argument
-    // (inline code, encoded payload) and its timeout exception would stop the caller's audit.
+    // not a .sh script. A regular expression searching a target anywhere backtracks quadratically on a long argument
+    // (inline code, encoded payload) or a long run of blanks, and its timeout exception would stop the caller's audit.
     private static readonly char[] TokenSeparators = [' ', '\t', '\r', '\n', '"', '\''];
 
     private static readonly string[] ShellScriptExtensions = [".bat", ".cmd", ".ps1", ".sh", ".py"];
@@ -185,14 +182,9 @@ public sealed class CrossPlatformProcessInspector : IProcessInspector
             return string.Empty;
         }
 
-        var isJava = processName.Contains("java", StringComparison.OrdinalIgnoreCase);
-        if (isJava)
+        if (processName.Contains("java", StringComparison.OrdinalIgnoreCase))
         {
-            var match = JarPattern.Match(commandLine);
-            if (match.Success)
-            {
-                return match.Groups["target"].Value;
-            }
+            return FindJarTarget(commandLine.Split(TokenSeparators, StringSplitOptions.RemoveEmptyEntries));
         }
 
         var extensions = TargetExtensionsOf(processName);
@@ -206,6 +198,25 @@ public sealed class CrossPlatformProcessInspector : IProcessInspector
             if (Array.Exists(extensions, extension => token.EndsWith(extension, StringComparison.OrdinalIgnoreCase)))
             {
                 return token;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    // A JAR is the target only right after -jar or after another JAR: a JAR given to -cp or -classpath is a library,
+    // not the application the process runs. A quoted path containing a space is split like any other token, so its
+    // last part no longer follows -jar and the target stays empty rather than truncated.
+    private static string FindJarTarget(string[] tokens)
+    {
+        for (var index = 1; index < tokens.Length; index++)
+        {
+            var previous = tokens[index - 1];
+            var followsJarOption = previous.Equals("-jar", StringComparison.OrdinalIgnoreCase) ||
+                                   previous.EndsWith(".jar", StringComparison.OrdinalIgnoreCase);
+            if (followsJarOption && tokens[index].EndsWith(".jar", StringComparison.OrdinalIgnoreCase))
+            {
+                return tokens[index];
             }
         }
 
