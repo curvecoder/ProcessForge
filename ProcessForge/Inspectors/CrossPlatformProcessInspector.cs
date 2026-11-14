@@ -11,7 +11,21 @@ namespace ProcessForge.Inspectors;
 public sealed class CrossPlatformProcessInspector : IProcessInspector
 {
     private static readonly Regex JarPattern = new(@"\s+(-jar\s+|(?<=\.jar\s+)|^)(?<target>[^\s""']+\.jar)", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ExplicitCapture, TimeSpan.FromMilliseconds(500));
-    private static readonly Regex ScriptPattern = new(@"(?<target>[^\s""']+\.(?:bat|cmd|ps1|sh|py))", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ExplicitCapture, TimeSpan.FromMilliseconds(500));
+
+    // The command line is split into tokens and the extension is tested at the end of each one, so that foo.shared is
+    // not a .sh script. A regular expression searching a script anywhere backtracks quadratically on a long argument
+    // (inline code, encoded payload) and its timeout exception would stop the caller's audit.
+    private static readonly char[] TokenSeparators = [' ', '\t', '\r', '\n', '"', '\''];
+
+    private static readonly string[] ShellScriptExtensions = [".bat", ".cmd", ".ps1", ".sh", ".py"];
+    private static readonly string[] PythonScriptExtensions = [".py"];
+    private static readonly string[] NodeScriptExtensions = [".js", ".mjs", ".cjs"];
+    private static readonly string[] DotnetAssemblyExtensions = [".dll"];
+
+    private static readonly HashSet<string> ShellHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "cmd", "powershell", "pwsh", "bash", "sh",
+    };
 
     /// <inheritdoc />
     public Task<ProcessMetadata> ResolveProcessAsync(int processId, CancellationToken cancellationToken = default)
@@ -149,21 +163,43 @@ public sealed class CrossPlatformProcessInspector : IProcessInspector
             }
         }
 
-        var isScriptHost = processName.Equals("cmd", StringComparison.OrdinalIgnoreCase) ||
-                           processName.Equals("powershell", StringComparison.OrdinalIgnoreCase) ||
-                           processName.Equals("pwsh", StringComparison.OrdinalIgnoreCase) ||
-                           processName.Equals("bash", StringComparison.OrdinalIgnoreCase) ||
-                           processName.Equals("sh", StringComparison.OrdinalIgnoreCase);
-
-        if (isScriptHost)
+        var extensions = TargetExtensionsOf(processName);
+        if (extensions.Length == 0)
         {
-            var match = ScriptPattern.Match(commandLine);
-            if (match.Success)
+            return string.Empty;
+        }
+
+        foreach (var token in commandLine.Split(TokenSeparators, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (Array.Exists(extensions, extension => token.EndsWith(extension, StringComparison.OrdinalIgnoreCase)))
             {
-                return match.Groups["target"].Value;
+                return token;
             }
         }
 
         return string.Empty;
+    }
+
+    private static string[] TargetExtensionsOf(string processName)
+    {
+        if (ShellHosts.Contains(processName))
+        {
+            return ShellScriptExtensions;
+        }
+
+        // Linux names the interpreter after its versioned binary (python3, python3.12); Windows uses python, pythonw
+        // or the py launcher.
+        if (processName.Equals("py", StringComparison.OrdinalIgnoreCase) ||
+            processName.StartsWith("python", StringComparison.OrdinalIgnoreCase))
+        {
+            return PythonScriptExtensions;
+        }
+
+        if (processName.Equals("node", StringComparison.OrdinalIgnoreCase))
+        {
+            return NodeScriptExtensions;
+        }
+
+        return processName.Equals("dotnet", StringComparison.OrdinalIgnoreCase) ? DotnetAssemblyExtensions : [];
     }
 }

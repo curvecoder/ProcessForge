@@ -22,6 +22,75 @@ public sealed class ProcessForgeTests
         target.Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("python", "C:\\Python312\\python.exe C:\\apps\\collector.py --verbose", "C:\\apps\\collector.py")]
+    [InlineData("python3.12", "/usr/bin/python3.12 /opt/monitor/agent.py", "/opt/monitor/agent.py")]
+    [InlineData("node", "node /srv/proxy/server.js", "/srv/proxy/server.js")]
+    [InlineData("node", "node /srv/proxy/server.mjs", "/srv/proxy/server.mjs")]
+    [InlineData("dotnet", "dotnet /opt/gateway/Gateway.dll --urls http://nas.home.arpa:5000", "/opt/gateway/Gateway.dll")]
+    public void ResolveTargetPayload_WhenInterpreterRunsScriptOrAssembly_ExtractsTarget(string procName, string cmdLine, string expected)
+    {
+        // Act
+        var target = CrossPlatformProcessInspector.ResolveTargetPayload(procName, cmdLine);
+
+        // Assert
+        target.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("pythonw", "C:\\Python312\\pythonw.exe C:\\apps\\tray.py", "C:\\apps\\tray.py")]
+    [InlineData("py", "py.exe -3 C:\\apps\\collector.py", "C:\\apps\\collector.py")]
+    [InlineData("node", "node /srv/proxy/legacy.cjs", "/srv/proxy/legacy.cjs")]
+    [InlineData("cmd", "cmd.exe /c \"C:\\scripts\\nightly.cmd\"", "C:\\scripts\\nightly.cmd")]
+    public void ResolveTargetPayload_WhenInterpreterVariantRunsScript_ExtractsTarget(string procName, string cmdLine, string expected)
+    {
+        // Act
+        var target = CrossPlatformProcessInspector.ResolveTargetPayload(procName, cmdLine);
+
+        // Assert
+        target.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("bash", "/bin/bash -c cat /srv/www/app.js")]
+    [InlineData("cmd", "cmd.exe /c copy C:\\build\\Gateway.dll D:\\deploy")]
+    [InlineData("node", "node /srv/www/tools.py")]
+    public void ResolveTargetPayload_WhenExtensionBelongsToAnotherHost_ReturnsEmpty(string procName, string cmdLine)
+    {
+        // Act
+        var target = CrossPlatformProcessInspector.ResolveTargetPayload(procName, cmdLine);
+
+        // Assert
+        target.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ResolveTargetPayload_WhenArgumentIsLongDottedTokenWithoutScript_ReturnsEmptyQuickly()
+    {
+        // Arrange: inline code or encoded payloads can make one argument tens of thousands of characters long.
+        var payload = string.Concat(Enumerable.Repeat("a.", 50_000));
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        // Act
+        var act = () => CrossPlatformProcessInspector.ResolveTargetPayload("python3", $"python3 -c {payload}");
+
+        // Assert
+        act.Should().NotThrow().Subject.Should().BeEmpty();
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(250));
+    }
+
+    [Theory]
+    [InlineData("bash", "/bin/bash -c cat /etc/foo.shared")]
+    [InlineData("cmd", "cmd.exe /c type C:\\data\\report.cmdline")]
+    public void ResolveTargetPayload_WhenExtensionOnlyStartsLikeScriptExtension_ReturnsEmpty(string procName, string cmdLine)
+    {
+        // Act
+        var target = CrossPlatformProcessInspector.ResolveTargetPayload(procName, cmdLine);
+
+        // Assert
+        target.Should().BeEmpty();
+    }
+
     [Fact]
     public void ShouldExclude_WhenPidMatches_ReturnsTrue()
     {

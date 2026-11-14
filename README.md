@@ -16,7 +16,7 @@ Cross-platform .NET process inspection framework for extracting command-line met
 * **Cross-Platform Process Inspection**: Inspects active processes across Windows (`NtQueryInformationProcess`, Windows 8.1 and later) and Linux (`/proc/<pid>/cmdline`), resolving executable paths, process names, owner accounts, and start times.
 * **Execution Wrapper Target Resolution**: Automatically inspects command-line arguments to determine the true underlying application target:
   * Java wrappers: extracts target `.jar` files executed via `java -jar app.jar`.
-  * Script interpreters: extracts executing scripts (`.ps1`, `.bat`, `.cmd`, `.sh`, `.py`, `.js`).
+  * Script interpreters: extracts the script or assembly run by a shell (`cmd`, `powershell`, `pwsh`, `bash`, `sh`: `.bat`, `.cmd`, `.ps1`, `.sh`, `.py`), Python (`python*`, `py`: `.py`), `node` (`.js`, `.mjs`, `.cjs`) or `dotnet` (`.dll`).
 * **Multi-Criteria Dynamic Filtering (`ProcessExclusionFilter`)**:
   * Evaluates exclusions by process numeric ID (PID), exact name, prefix, suffix, and substring matches.
   * Filters out operating system service accounts (well-known SIDs `S-1-5-18`, `S-1-5-19`, `S-1-5-20` on any Windows language, `SYSTEM`, `NT AUTHORITY`, `root`).
