@@ -7,6 +7,9 @@ namespace ProcessForge.Filtering;
 /// </summary>
 public sealed class ProcessExclusionFilter(ProcessExclusionOptions options)
 {
+    /// <summary>LocalSystem, LocalService and NetworkService.</summary>
+    private static readonly string[] WellKnownServiceAccountSids = ["S-1-5-18", "S-1-5-19", "S-1-5-20"];
+
     private readonly ProcessExclusionOptions _options = options ?? throw new ArgumentNullException(nameof(options));
     private readonly HashSet<string> _dynamicallyExcludedExactNames = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _syncLock = new();
@@ -38,7 +41,7 @@ public sealed class ProcessExclusionFilter(ProcessExclusionOptions options)
             return true;
         }
 
-        if (_options.ExcludeSystemAccounts && IsSystemAccount(process.UserName))
+        if (_options.ExcludeSystemAccounts && IsSystemAccount(process))
         {
             return true;
         }
@@ -117,8 +120,16 @@ public sealed class ProcessExclusionFilter(ProcessExclusionOptions options)
         }
     }
 
-    private static bool IsSystemAccount(string userName)
+    private static bool IsSystemAccount(ProcessMetadata process)
     {
+        // Windows translates the names of the service accounts (AUTORITE NT\Système on a French system), so the
+        // well-known SIDs are the only language-independent test; the names remain for metadata built without a SID.
+        if (WellKnownServiceAccountSids.Contains(process.UserSid, StringComparer.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var userName = process.UserName;
         if (string.IsNullOrWhiteSpace(userName))
         {
             return false;

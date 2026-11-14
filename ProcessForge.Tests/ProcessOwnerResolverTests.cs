@@ -20,6 +20,27 @@ public sealed class ProcessOwnerResolverTests
     }
 
     [Fact]
+    public async Task ResolveProcessAsync_WhenProcessIsCurrentProcess_ReturnsCurrentAccountSidOnWindowsOnly()
+    {
+        // Arrange
+        var inspector = new CrossPlatformProcessInspector();
+        var expectedSid = OperatingSystem.IsWindows() ? CurrentWindowsAccountSid() : string.Empty;
+
+        // Act
+        var metadata = await inspector.ResolveProcessAsync(Environment.ProcessId);
+
+        // Assert
+        metadata.UserSid.Should().Be(expectedSid);
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static string CurrentWindowsAccountSid()
+    {
+        using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+        return identity.User?.Value ?? string.Empty;
+    }
+
+    [Fact]
     public void ParseRealUserId_WhenStatusContainsUidLine_ReturnsRealUserId()
     {
         // Arrange

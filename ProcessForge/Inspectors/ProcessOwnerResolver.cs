@@ -18,16 +18,16 @@ internal static partial class ProcessOwnerResolver
     private const string UidField = "Uid:";
 
     /// <summary>
-    /// Returns the process account, or an empty string when it cannot be read.
+    /// Returns the process account, with empty members when it cannot be read.
     /// </summary>
-    public static string Resolve(int processId)
+    public static ProcessOwner Resolve(int processId)
     {
         if (OperatingSystem.IsWindows())
         {
             return ResolveOnWindows(processId);
         }
 
-        return OperatingSystem.IsLinux() ? ResolveOnLinux(processId) : string.Empty;
+        return OperatingSystem.IsLinux() ? new ProcessOwner(ResolveOnLinux(processId), string.Empty) : ProcessOwner.Unknown;
     }
 
     /// <summary>
@@ -71,14 +71,14 @@ internal static partial class ProcessOwnerResolver
     }
 
     [SupportedOSPlatform("windows")]
-    private static string ResolveOnWindows(int processId)
+    private static ProcessOwner ResolveOnWindows(int processId)
     {
         // PROCESS_QUERY_LIMITED_INFORMATION suffices to read the token, including for services of other accounts
         // when the caller is elevated; protected processes still refuse it and keep an empty account.
         using var process = OpenProcess(ProcessQueryLimitedInformation, inheritHandle: false, processId);
         if (process.IsInvalid || !OpenProcessToken(process, TokenQuery, out var token))
         {
-            return string.Empty;
+            return ProcessOwner.Unknown;
         }
 
         using (token)
@@ -86,7 +86,7 @@ internal static partial class ProcessOwnerResolver
             _ = GetTokenInformation(token, TokenUserInformationClass, IntPtr.Zero, 0, out var length);
             if (length <= 0)
             {
-                return string.Empty;
+                return ProcessOwner.Unknown;
             }
 
             // TOKEN_USER starts with a pointer to the SID inside the same buffer, so the buffer must stay unmanaged
@@ -94,9 +94,13 @@ internal static partial class ProcessOwnerResolver
             var buffer = Marshal.AllocHGlobal(length);
             try
             {
-                return GetTokenInformation(token, TokenUserInformationClass, buffer, length, out _)
-                    ? TranslateAccount(new SecurityIdentifier(Marshal.ReadIntPtr(buffer)))
-                    : string.Empty;
+                if (!GetTokenInformation(token, TokenUserInformationClass, buffer, length, out _))
+                {
+                    return ProcessOwner.Unknown;
+                }
+
+                var sid = new SecurityIdentifier(Marshal.ReadIntPtr(buffer));
+                return new ProcessOwner(TranslateAccount(sid), sid.Value);
             }
             finally
             {

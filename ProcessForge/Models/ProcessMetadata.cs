@@ -15,4 +15,12 @@ public sealed record ProcessMetadata(
     string ExecutablePath,
     string CommandLine,
     string TargetExecutable,
-    string UserName);
+    string UserName)
+{
+    /// <summary>
+    /// Security identifier of the account the process runs under (for example <c>S-1-5-18</c> for LocalSystem) on Windows.
+    /// Unlike <see cref="UserName"/>, it does not depend on the display language of the system.
+    /// Empty on Linux and when the access token of the process cannot be read.
+    /// </summary>
+    public string UserSid { get; init; } = string.Empty;
+}

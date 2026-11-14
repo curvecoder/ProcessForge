@@ -19,7 +19,7 @@ Cross-platform .NET process inspection framework for extracting command-line met
   * Script interpreters: extracts executing scripts (`.ps1`, `.bat`, `.cmd`, `.sh`, `.py`, `.js`).
 * **Multi-Criteria Dynamic Filtering (`ProcessExclusionFilter`)**:
   * Evaluates exclusions by process numeric ID (PID), exact name, prefix, suffix, and substring matches.
-  * Filters out operating system service accounts (`SYSTEM`, `NT AUTHORITY`, `root`).
+  * Filters out operating system service accounts (well-known SIDs `S-1-5-18`, `S-1-5-19`, `S-1-5-20` on any Windows language, `SYSTEM`, `NT AUTHORITY`, `root`).
   * Thread-safe on-the-fly rule additions (`ExcludeExactName`).
 
 ---

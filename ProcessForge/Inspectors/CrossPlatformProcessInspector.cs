@@ -36,6 +36,7 @@ public sealed class CrossPlatformProcessInspector : IProcessInspector
             var executablePath = TryGetExecutablePath(proc);
             var commandLine = TryGetCommandLine(proc);
             var targetPayload = ResolveTargetPayload(processName, commandLine);
+            var owner = ProcessOwnerResolver.Resolve(processId);
 
             return Task.FromResult(new ProcessMetadata(
                 ProcessId: processId,
@@ -43,7 +44,10 @@ public sealed class CrossPlatformProcessInspector : IProcessInspector
                 ExecutablePath: executablePath,
                 CommandLine: commandLine,
                 TargetExecutable: targetPayload,
-                UserName: ProcessOwnerResolver.Resolve(processId)));
+                UserName: owner.UserName)
+            {
+                UserSid = owner.UserSid,
+            });
         }
         catch (ArgumentException)
         {

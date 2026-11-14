@@ -253,6 +253,32 @@ public sealed class ProcessForgeTests
         filter.ShouldExclude(proc).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("AUTORITE NT\\Système", "S-1-5-18")]
+    [InlineData("AUTORITE NT\\SERVICE LOCAL", "S-1-5-19")]
+    [InlineData("AUTORITE NT\\SERVICE RÉSEAU", "S-1-5-20")]
+    [InlineData("AUTORITE NT\\Système", "s-1-5-18")]
+    public void ShouldExclude_WhenLocalizedSystemAccountHasWellKnownSid_ReturnsTrue(string userName, string userSid)
+    {
+        // Arrange
+        var filter = new ProcessExclusionFilter(new ProcessExclusionOptions { ExcludeSystemAccounts = true });
+        var proc = new ProcessMetadata(100, "custom_service", "", "", "", userName) { UserSid = userSid };
+
+        // Act & Assert
+        filter.ShouldExclude(proc).Should().BeTrue();
+    }
+
+    [Fact]
+    public void ShouldExclude_WhenUserSidIsRegularAccount_ReturnsFalse()
+    {
+        // Arrange
+        var filter = new ProcessExclusionFilter(new ProcessExclusionOptions { ExcludeSystemAccounts = true });
+        var proc = new ProcessMetadata(100, "custom_service", "", "", "", "HOMELAB\\alice") { UserSid = "S-1-5-21-1004336348-1177238915-682003330-1001" };
+
+        // Act & Assert
+        filter.ShouldExclude(proc).Should().BeFalse();
+    }
+
     [Fact]
     public void ShouldExclude_WhenNameMatchesPrefix_ReturnsTrue()
     {
