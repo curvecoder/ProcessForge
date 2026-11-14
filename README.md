@@ -13,7 +13,7 @@ Cross-platform .NET process inspection framework for extracting command-line met
 
 ## Key Capabilities
 
-* **Cross-Platform Process Inspection**: Inspects active processes across Windows (Win32 Toolhelp32/NtQuery) and Linux (`/proc/<pid>/cmdline`), resolving executable paths, process names, owner accounts, and start times.
+* **Cross-Platform Process Inspection**: Inspects active processes across Windows (`NtQueryInformationProcess`, Windows 8.1 and later) and Linux (`/proc/<pid>/cmdline`), resolving executable paths, process names, owner accounts, and start times.
 * **Execution Wrapper Target Resolution**: Automatically inspects command-line arguments to determine the true underlying application target:
   * Java wrappers: extracts target `.jar` files executed via `java -jar app.jar`.
   * Script interpreters: extracts executing scripts (`.ps1`, `.bat`, `.cmd`, `.sh`, `.py`, `.js`).

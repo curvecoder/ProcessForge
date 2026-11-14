@@ -157,6 +157,60 @@ public sealed class ProcessForgeTests
     }
 
     [Fact]
+    public async Task ResolveProcessAsync_WhenProcessIsCurrentProcess_ReturnsCommandLineContainingExecutableName()
+    {
+        // Arrange
+        var inspector = new CrossPlatformProcessInspector();
+        var executableName = Path.GetFileNameWithoutExtension(Environment.ProcessPath);
+
+        // Act
+        var result = await inspector.ResolveProcessAsync(Environment.ProcessId);
+
+        // Assert
+        executableName.Should().NotBeNullOrEmpty();
+        result.CommandLine.Should().ContainEquivalentOf(executableName);
+    }
+
+    [Fact]
+    public async Task ResolveProcessAsync_WhenShellRunsScript_ReturnsScriptAsTargetExecutable()
+    {
+        // Arrange
+        var inspector = new CrossPlatformProcessInspector();
+        var scriptPath = Path.Combine(Path.GetTempPath(), $"processforge_{Guid.NewGuid():N}" + (OperatingSystem.IsWindows() ? ".bat" : ".sh"));
+        var startInfo = OperatingSystem.IsWindows()
+            ? new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c \"{scriptPath}\"")
+            : new System.Diagnostics.ProcessStartInfo("/bin/sh", scriptPath);
+        startInfo.UseShellExecute = false;
+        startInfo.CreateNoWindow = true;
+
+        try
+        {
+            await File.WriteAllTextAsync(scriptPath, OperatingSystem.IsWindows() ? "@ping -n 30 127.0.0.1 > nul" : "sleep 30");
+            using var shell = System.Diagnostics.Process.Start(startInfo);
+            shell.Should().NotBeNull();
+
+            try
+            {
+                // Act
+                var result = await inspector.ResolveProcessAsync(shell!.Id);
+
+                // Assert: the file name only, because the script pattern stops at a space and the temporary
+                // directory of some accounts contains one (C:\Users\First Last\...).
+                result.TargetExecutable.Should().EndWith(Path.GetFileName(scriptPath));
+            }
+            finally
+            {
+                shell!.Kill(entireProcessTree: true);
+                await shell.WaitForExitAsync();
+            }
+        }
+        finally
+        {
+            File.Delete(scriptPath);
+        }
+    }
+
+    [Fact]
     public async Task ResolveProcessAsync_WhenProcessDoesNotExist_ReturnsTerminated()
     {
         // Arrange

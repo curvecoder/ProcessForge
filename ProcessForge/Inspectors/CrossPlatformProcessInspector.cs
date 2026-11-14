@@ -81,6 +81,11 @@ public sealed class CrossPlatformProcessInspector : IProcessInspector
 
     private static string TryGetCommandLine(Process proc)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            return WindowsCommandLineReader.Read(proc.Id);
+        }
+
         if (OperatingSystem.IsLinux())
         {
             var cmdlinePath = $"/proc/{proc.Id}/cmdline";

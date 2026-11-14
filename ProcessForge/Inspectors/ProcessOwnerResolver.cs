@@ -12,7 +12,6 @@ namespace ProcessForge.Inspectors;
 /// </summary>
 internal static partial class ProcessOwnerResolver
 {
-    private const uint ProcessQueryLimitedInformation = 0x1000;
     private const uint TokenQuery = 0x0008;
     private const int TokenUserInformationClass = 1;
     private const string UidField = "Uid:";
@@ -75,7 +74,7 @@ internal static partial class ProcessOwnerResolver
     {
         // PROCESS_QUERY_LIMITED_INFORMATION suffices to read the token, including for services of other accounts
         // when the caller is elevated; protected processes still refuse it and keep an empty account.
-        using var process = OpenProcess(ProcessQueryLimitedInformation, inheritHandle: false, processId);
+        using var process = Win32ProcessOpener.OpenForLimitedQuery(processId);
         if (process.IsInvalid || !OpenProcessToken(process, TokenQuery, out var token))
         {
             return ProcessOwner.Unknown;
@@ -138,9 +137,6 @@ internal static partial class ProcessOwnerResolver
             return string.Empty;
         }
     }
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    private static partial SafeProcessHandle OpenProcess(uint desiredAccess, [MarshalAs(UnmanagedType.Bool)] bool inheritHandle, int processId);
 
     [LibraryImport("advapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
