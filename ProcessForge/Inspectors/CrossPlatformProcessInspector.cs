@@ -32,34 +32,56 @@ public sealed class CrossPlatformProcessInspector : IProcessInspector
         try
         {
             using var proc = Process.GetProcessById(processId);
-            var processName = proc.ProcessName;
-            var executablePath = TryGetExecutablePath(proc);
-            var commandLine = TryGetCommandLine(proc);
-            var targetPayload = ResolveTargetPayload(processName, commandLine);
-            var owner = ProcessOwnerResolver.Resolve(processId);
-
-            return Task.FromResult(new ProcessMetadata(
-                ProcessId: processId,
-                ProcessName: processName,
-                ExecutablePath: executablePath,
-                CommandLine: commandLine,
-                TargetExecutable: targetPayload,
-                UserName: owner.UserName)
-            {
-                UserSid = owner.UserSid,
-            });
+            return Task.FromResult(Describe(proc));
         }
         catch (ArgumentException)
         {
-            return Task.FromResult(new ProcessMetadata(
-                ProcessId: processId,
-                ProcessName: "Terminated",
-                ExecutablePath: string.Empty,
-                CommandLine: string.Empty,
-                TargetExecutable: string.Empty,
-                UserName: string.Empty));
+            return Task.FromResult(Terminated(processId));
         }
     }
+
+    /// <summary>
+    /// Reads the metadata of a process object obtained beforehand.
+    /// </summary>
+    internal static ProcessMetadata Describe(Process proc)
+    {
+        var processId = proc.Id;
+        string processName;
+        try
+        {
+            processName = proc.ProcessName;
+        }
+        catch (InvalidOperationException)
+        {
+            // The process ended between GetProcessById and this read: it is reported as terminated, like a PID that
+            // no longer exists, instead of stopping the caller's whole audit.
+            return Terminated(processId);
+        }
+
+        var executablePath = TryGetExecutablePath(proc);
+        var commandLine = TryGetCommandLine(proc);
+        var targetPayload = ResolveTargetPayload(processName, commandLine);
+        var owner = ProcessOwnerResolver.Resolve(processId);
+
+        return new ProcessMetadata(
+            ProcessId: processId,
+            ProcessName: processName,
+            ExecutablePath: executablePath,
+            CommandLine: commandLine,
+            TargetExecutable: targetPayload,
+            UserName: owner.UserName)
+        {
+            UserSid = owner.UserSid,
+        };
+    }
+
+    private static ProcessMetadata Terminated(int processId) => new(
+        ProcessId: processId,
+        ProcessName: "Terminated",
+        ExecutablePath: string.Empty,
+        CommandLine: string.Empty,
+        TargetExecutable: string.Empty,
+        UserName: string.Empty);
 
     private static string TryGetExecutablePath(Process proc)
     {
@@ -96,9 +118,10 @@ public sealed class CrossPlatformProcessInspector : IProcessInspector
                     var bytes = File.ReadAllBytes(cmdlinePath);
                     return System.Text.Encoding.UTF8.GetString(bytes).Replace('\0', ' ').Trim();
                 }
-                catch (IOException)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    // I/O read error
+                    // The process may end before the read, or /proc may hide it (hidepid, restricted container): the
+                    // command line stays empty and the caller's audit goes on.
                 }
             }
         }

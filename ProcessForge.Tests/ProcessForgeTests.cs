@@ -211,6 +211,29 @@ public sealed class ProcessForgeTests
     }
 
     [Fact]
+    public async Task Describe_WhenProcessExitedAfterLookup_ReturnsTerminated()
+    {
+        // Arrange: a Process object whose process has already exited, as when the process ends between
+        // GetProcessById and the first property read.
+        var startInfo = OperatingSystem.IsWindows()
+            ? new System.Diagnostics.ProcessStartInfo("cmd.exe", "/c exit 0")
+            : new System.Diagnostics.ProcessStartInfo("/bin/sh", "-c true");
+        startInfo.UseShellExecute = false;
+        startInfo.CreateNoWindow = true;
+        using var exited = System.Diagnostics.Process.Start(startInfo);
+        exited.Should().NotBeNull();
+        await exited!.WaitForExitAsync();
+
+        // Act
+        var act = () => CrossPlatformProcessInspector.Describe(exited);
+
+        // Assert
+        var result = act.Should().NotThrow().Subject;
+        result.ProcessId.Should().Be(exited.Id);
+        result.ProcessName.Should().Be("Terminated");
+    }
+
+    [Fact]
     public async Task ResolveProcessAsync_WhenProcessDoesNotExist_ReturnsTerminated()
     {
         // Arrange
