@@ -61,7 +61,7 @@ public sealed class CrossPlatformProcessInspector : IProcessInspector
         string processName;
         try
         {
-            processName = proc.ProcessName;
+            processName = ReadProcessName(proc);
         }
         catch (InvalidOperationException)
         {
@@ -94,6 +94,11 @@ public sealed class CrossPlatformProcessInspector : IProcessInspector
         CommandLine: string.Empty,
         TargetExecutable: string.Empty,
         UserName: string.Empty);
+
+    // Process.ProcessName stays the source when the direct query has no answer: it names the image-less processes
+    // (Idle, Secure System) and throws InvalidOperationException for an exited one.
+    private static string ReadProcessName(Process proc) =>
+        OperatingSystem.IsWindows() && WindowsProcessNameReader.Read(proc.Id) is { } name ? name : proc.ProcessName;
 
     private static string TryGetExecutablePath(Process proc)
     {
