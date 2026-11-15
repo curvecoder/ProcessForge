@@ -14,6 +14,7 @@ Cross-platform .NET process inspection framework for extracting command-line met
 ## Key Capabilities
 
 * **Cross-Platform Process Inspection**: Inspects active processes across Windows (`NtQueryInformationProcess`, Windows 8.1 and later) and Linux (`/proc/<pid>/cmdline`), resolving executable paths, process names, command lines, and owner accounts (name and, on Windows, SID).
+* **Cross-Scan Caching (`CachingProcessInspector`)**: Decorates an inspector and keeps the resolved metadata keyed by PID and process start time, so repeated scans only resolve new processes and a reused PID is resolved again.
 * **Execution Wrapper Target Resolution**: Automatically inspects command-line arguments to determine the true underlying application target:
   * Java wrappers: extracts target `.jar` files executed via `java -jar app.jar`, quoted or not (a JAR given to `-cp` is a library, not the target).
   * Script interpreters: extracts the script or assembly run by a shell (`cmd`, `powershell`, `pwsh`, `bash`, `sh`: `.bat`, `.cmd`, `.ps1`, `.sh`, `.py`), Python (`python*`, `py`: `.py`), `node` (`.js`, `.mjs`, `.cjs`) or `dotnet` (`.dll`).
@@ -29,7 +30,7 @@ Cross-platform .NET process inspection framework for extracting command-line met
 Add the package via the .NET CLI:
 
 ```powershell
-dotnet add package ProcessForge --version 1.1.2
+dotnet add package ProcessForge --version 1.3.0
 ```
 
 ---
@@ -40,7 +41,8 @@ dotnet add package ProcessForge --version 1.1.2
 using ProcessForge.Filtering;
 using ProcessForge.Inspectors;
 
-var inspector = new CrossPlatformProcessInspector();
+// Keep one caching inspector for the lifetime of the scanner: repeated scans only resolve new processes.
+var inspector = new CachingProcessInspector(new CrossPlatformProcessInspector());
 var filter = new ProcessExclusionFilter(new ProcessExclusionOptions());
 filter.ExcludeExactName("svchost");
 
