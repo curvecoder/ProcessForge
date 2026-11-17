@@ -257,6 +257,41 @@ public sealed class ProcessForgeTests
         result.ExecutablePath.Should().NotBeNullOrWhiteSpace();
     }
 
+    [WindowsFact]
+    public async Task ResolveProcessAsync_WhenProcessIsCurrentProcess_ReturnsSamePathAsEnvironment()
+    {
+        // Arrange
+        var inspector = new CrossPlatformProcessInspector();
+
+        // Act
+        var result = await inspector.ResolveProcessAsync(Environment.ProcessId);
+
+        // Assert: case is ignored because the kernel spells the path as the file system stores it, while
+        // Environment.ProcessPath keeps the spelling used to launch the process.
+        result.ExecutablePath.Should().BeEquivalentTo(Environment.ProcessPath);
+    }
+
+    [WindowsFact]
+    public async Task ResolveProcessAsync_WhenProcessCannotBeOpenedToReadItsMemory_ReturnsExecutablePath()
+    {
+        // Arrange: csrss is a protected process; no caller, elevated or not, may read its memory, as with a service
+        // running under another account whose process DACL leaves the caller out.
+        var csrssProcesses = System.Diagnostics.Process.GetProcessesByName("csrss");
+        var csrssId = csrssProcesses.Select(process => process.Id).First();
+        foreach (var process in csrssProcesses)
+        {
+            process.Dispose();
+        }
+
+        var inspector = new CrossPlatformProcessInspector();
+
+        // Act
+        var result = await inspector.ResolveProcessAsync(csrssId);
+
+        // Assert
+        result.ExecutablePath.Should().BeEquivalentTo(Path.Combine(Environment.SystemDirectory, "csrss.exe"));
+    }
+
     [Fact]
     public async Task ResolveProcessAsync_WhenProcessIsCurrentProcess_ReturnsCommandLineContainingExecutableName()
     {

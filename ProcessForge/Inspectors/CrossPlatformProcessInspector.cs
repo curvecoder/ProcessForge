@@ -102,9 +102,14 @@ public sealed class CrossPlatformProcessInspector : IProcessInspector
 
     private static string TryGetExecutablePath(Process proc)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            return WindowsImagePathReader.Read(proc.Id) ?? string.Empty;
+        }
+
         try
         {
-            if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux())
+            if (OperatingSystem.IsLinux())
             {
                 var module = proc.MainModule;
                 return module?.FileName ?? string.Empty;
@@ -112,7 +117,8 @@ public sealed class CrossPlatformProcessInspector : IProcessInspector
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            // Insufficient rights or process already exited
+            // The /proc/<pid>/exe link of another user's process is unreadable without root, and the process may have
+            // exited since it was found: the metadata is still reported, with an empty path the caller can display.
         }
 
         return string.Empty;
